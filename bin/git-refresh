@@ -1,0 +1,68 @@
+#!/usr/bin/env perl
+use v5.20;
+use warnings;
+use autodie qw(:all);
+use English;
+use IO::Prompt qw(prompt);
+
+my $target_branch = shift || 'master';
+
+my $source_branch = qx(git symbolic-ref --short HEAD);
+exit 1 if $CHILD_ERROR;
+
+chomp($source_branch);
+
+my $is_on_target = $source_branch eq $target_branch;
+if ($is_on_target) {
+    say "You're on $target_branch, what do you want to do? (Use 'git pull' maybe?)";
+    exit;
+}
+
+my $answer
+  = prompt("Do you want to rebase $source_branch on top of $target_branch? [y/N] ");
+if ($answer !~ /^[yY]/) {
+    say "OK, exiting";
+    exit;
+}
+
+# Create stash entry with current uncommitted changes
+chomp(my $stash_name = qx(git stash create));
+exit 1 if $CHILD_ERROR;
+
+if (!$stash_name) {
+    say "No changes found";
+}
+else {
+    say "\nStashing changes...";
+
+    # Stash changes and make root directory clean
+    system qw(git stash store -m),
+      "Before rebase of $source_branch onto $target_branch", $stash_name;
+
+    chomp(my $root_dir = qx(git rev-parse --show-toplevel));
+    exit 1 if $CHILD_ERROR;
+
+    system qw(git checkout), $source_branch, qw(--), $root_dir;
+}
+
+# Check out target branch and pull its changes from remote origin
+say "\nChecking out $target_branch...";
+system qw(git checkout), $target_branch;
+
+say "\nPulling changes from origin to $target_branch...";
+system qw(git pull origin), $target_branch;
+
+# Check out source branch and rebase it on top of target
+say "\nChecking out $source_branch...";
+system qw(git checkout), $source_branch;
+
+say "\nRebasing $source_branch on top of $target_branch...";
+system qw(git rebase), $target_branch;
+
+# Restore stashed changes, if any
+if ($stash_name) {
+    say "\nRestoring stashed changes...";
+    system qw(git stash pop --quiet);
+}
+
+say "\nDone";

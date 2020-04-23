@@ -1,0 +1,9 @@
+#!/usr/bin/env perl
+use v5.20;
+use warnings;
+use autodie qw(:all);
+
+chomp(my $current_branch = qx(git symbolic-ref --short HEAD));
+my @args = (qw(git push origin), $current_branch, qw(--force-with-lease));
+say join ' ', @args;
+system @args;

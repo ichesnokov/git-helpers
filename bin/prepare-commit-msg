@@ -1,0 +1,40 @@
+#!/usr/bin/env perl
+
+=head1 DESCRIPTION
+
+Adds branch name to the beginning of your commit message if branch name is
+something like C<APP-1234> or C<APP-1111-GL123>, and message doesn't start with
+branch name yet.
+
+=head1 USAGE
+
+    # Copy this script to ~/bin/
+    cd $REPO_DIRECTORY/.git/hooks/
+    ln -s ~/bin/prepare-commit-msg
+
+=cut
+
+use strict;
+use warnings;
+use File::Slurper qw(read_text write_text);
+
+my ($commit_message_file, $commit_source, $sha1) = @ARGV;
+
+my $RE_TICKET_REFERENCE = qr{
+    ^(
+        \w+-\d+     # Jira issue reference
+        (?:-GL\d+)? # GitLab issue reference (optional)
+    )
+}x;
+
+chomp(my $branch = `git symbolic-ref --short HEAD`);
+if ($branch =~ $RE_TICKET_REFERENCE) {
+    my $ticket_id = $1;
+    my $message = read_text($commit_message_file);
+
+    # Make sure that message isn't starting with branch name yet (can happen
+    # e.g. during "git commit --amend").
+    if (index($message, $ticket_id) != 0) {
+        write_text($commit_message_file, "$ticket_id $message");
+    }
+}
